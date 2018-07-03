@@ -30,8 +30,7 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 #include <getopt.h>
-//#include <arpa/inet.h>
-#include "mavlink/mavlink.h"
+#include "mavlink/common/mavlink.h"
 
 int sock = 0;
 int socks[5];
