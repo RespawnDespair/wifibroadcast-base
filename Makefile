@@ -1,7 +1,7 @@
 LDFLAGS=-lrt -lpcap -lwiringPi
 CPPFLAGS=-Wall -D _GNU_SOURCE
 
-all: rx_rc_telemetry_buf rx rx_rc_telemetry rssirx rssitx tx tx_rawsock tx_telemetry tx_measure rx_status tracker rssilogger syslogger channelscan check_alive rssi_forward wifiscan wifibackgroundscan sharedmem_init_rx sharedmem_init_tx
+all: rx_rc_telemetry_buf rx rx_rc_telemetry rssirx rssitx tx_rawsock tx_telemetry tx_measure rx_status tracker rssilogger syslogger channelscan check_alive rssi_forward wifiscan wifibackgroundscan sharedmem_init_rx sharedmem_init_tx
 
 %.o: %.c
 	gcc -c -o $@ $< $(CPPFLAGS)
@@ -20,9 +20,6 @@ rssirx: rssirx.o lib.o radiotap.o
 	gcc -o $@ $^ $(LDFLAGS)
 
 rssitx: rssitx.o lib.o radiotap.o
-	gcc -o $@ $^ $(LDFLAGS)
-
-tx: tx.o lib.o fec.o
 	gcc -o $@ $^ $(LDFLAGS)
 
 tx_rawsock: tx_rawsock.o lib.o fec.o
