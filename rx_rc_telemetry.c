@@ -345,7 +345,8 @@ void process_packet(monitor_interface_t *interface, int adapter_no, int serialpo
 	    mavlink_msg_rc_channels_override_pack(255, 0, &msg, 1, 1,
 		rcdata.chan1, rcdata.chan2, rcdata.chan3, rcdata.chan4,
 		rcdata.chan5, rcdata.chan6, rcdata.chan7, rcdata.chan8);
-    	    mavlink_msg_to_send_buffer(outputbuffer, &msg);
+		// See if we can use the other 8 channels as well with mavlink
+    	mavlink_msg_to_send_buffer(outputbuffer, &msg);
 	    len = 26;
 	    break;
 	case 2: // SUMD
