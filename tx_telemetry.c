@@ -339,10 +339,18 @@ int main(int argc, char *argv[]) {
         if(!procfile) {fprintf(stderr,"ERROR: opening %s failed!\n", path); return 0;}
         fgets(line, 100, procfile); // read the first line
         fgets(line, 100, procfile); // read the 2nd line
-        if(strncmp(line, "DRIVER=ath9k_htc", 16) == 0) { // it's an atheros card
-            fprintf(stderr, "tx_telemetry: Atheros card detected\n");
+	if(strncmp(line, "DRIVER=ath9k_htc", 16) == 0 || 
+            (
+             strncmp(line, "DRIVER=8812au",    13) == 0 || 
+             strncmp(line, "DRIVER=8814au",    13) == 0 || 
+             strncmp(line, "DRIVER=rtl8812au", 16) == 0 || 
+             strncmp(line, "DRIVER=rtl8814au", 16) == 0 || 
+             strncmp(line, "DRIVER=rtl88xxau", 16) == 0
+            )
+          ) { // it's an atheros or realtek card 
+            fprintf(stderr, "tx_telemetry: Atheros or Realtek card detected\n");
 	    type[num_interfaces] = 0;
-        } else { // ralink
+        } else { // ralink or mediatek
             fprintf(stderr, "tx_telemetry: Ralink card detected\n");
 	    type[num_interfaces] = 1;
         }
