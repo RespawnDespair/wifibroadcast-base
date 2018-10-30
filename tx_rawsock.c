@@ -431,7 +431,7 @@ wifibroadcast_tx_status_t *telemetry_wbc_status_memory_open_tx(void) {
 	// TODO: Clean up rx_status shared memory handling
 	while(sharedmem == 0) {
 	    sprintf(buf, "/wifibroadcast_tx_status_%d", param_port);
-    	    fd = shm_open(buf, O_RDWR, S_IRUSR | S_IWUSR);
+    	    fd = shm_open(buf, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
         	if(fd < 0) {
             	    fprintf(stderr, "Could not open wifibroadcast tx status - retrying ...\n");
         	} else {
@@ -439,10 +439,10 @@ wifibroadcast_tx_status_t *telemetry_wbc_status_memory_open_tx(void) {
         	}
         	usleep(150000);
 	}
-//        if (ftruncate(fd, sizeof(wifibroadcast_tx_status_t)) == -1) {
-//                perror("ftruncate");
-//                exit(1);
-//        }
+        if (ftruncate(fd, sizeof(wifibroadcast_tx_status_t)) == -1) {
+                perror("ftruncate");
+                exit(1);
+        }
         void *retval = mmap(NULL, sizeof(wifibroadcast_tx_status_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         if (retval == MAP_FAILED) {
                 perror("mmap");

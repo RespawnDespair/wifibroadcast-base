@@ -130,8 +130,41 @@ struct rcdata_s {
 	unsigned int chan6 : 11;
 	unsigned int chan7 : 11;
 	unsigned int chan8 : 11;
+	unsigned int switches : 16;
 } __attribute__ ((__packed__));
-struct rcdata_s rcdata;
+
+#define JSSWITCHES 16
+#ifdef JSSWITCHES
+
+	struct rcdata_s *rcdata = NULL;
+
+	struct rcdata_s *rc_channels_memory_open(void) {
+
+		int fd = shm_open("/wifibroadcast_rc_channels", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+
+		if(fd < 0) {
+			fprintf(stderr,"rc shm_open\n");
+			exit(1);
+		}
+
+		if (ftruncate(fd, sizeof(struct rcdata_s)) == -1) {
+			fprintf(stderr,"rc ftruncate\n");
+			exit(1);
+		}
+
+		void *retval = mmap(NULL, sizeof(struct rcdata_s), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		if (retval == MAP_FAILED) {
+			fprintf(stderr,"rc mmap\n");
+			exit(1);
+		}
+
+	return (struct rcdata_s *)retval;
+	}
+#else
+///	static uint16_t rcData[8]; // interval [1000;2000]
+	struct rcdata_s rcdatamem;
+	struct rcdata_s *rcdata = &rcdatamem;
+#endif 
 
 void open_and_configure_interface(const char *name, monitor_interface_t *interface) {
 	struct bpf_program bpfprogram;
@@ -196,7 +229,7 @@ void process_packet(monitor_interface_t *interface, int adapter_no, int serialpo
     int u16HeaderLen;
     int type = 0; // r/c or telemetry
     int dbm_tmp;
-
+	
     // receive
     retval = pcap_next_ex(interface->ppcap, &ppcapPacketHeader, (const u_char**)&pu8Payload);
     if (retval < 0) {
@@ -265,8 +298,8 @@ void process_packet(monitor_interface_t *interface, int adapter_no, int serialpo
 	int len = 0;
 	int lostpackets = 0;
 	mavlink_message_t msg;
-        uint8_t checksum=0;
-	uint8_t outputbuffer[33];
+	uint8_t checksum=0;
+	uint8_t outputbuffer[100];	/// 33
 	rx_status_rc->adapter[adapter_no].current_signal_dbm = dbm_tmp;
 	rx_status_rc->adapter[adapter_no].received_packet_cnt++;
 	rx_status_rc->last_update = time(NULL);
@@ -302,15 +335,15 @@ void process_packet(monitor_interface_t *interface, int adapter_no, int serialpo
 //	    fprintf(stderr,"rx_status_rc->lost_packet_cnt: %d\n",rx_status_rc->lost_packet_cnt);
 	}
 
-	memcpy(&rcdata,pu8Payload,11); // copy payloaddata (rc channel data) to struct rcdata
-//	  printf ("rcdata1:%d\n",rcdata.chan1);
-//	  printf ("rcdata2:%d\n",rcdata.chan2);
-//	  printf ("rcdata3:%d\n",rcdata.chan3);
-//	  printf ("rcdata4:%d\n",rcdata.chan4);
-//	  printf ("rcdata5:%d\n",rcdata.chan5);
-//	  printf ("rcdata6:%d\n",rcdata.chan6);
-//	  printf ("rcdata7:%d\n",rcdata.chan7);
-//	  printf ("rcdata8:%d\n",rcdata.chan8);
+	memcpy(rcdata,pu8Payload,sizeof(struct rcdata_s)); // 13byte copy payloaddata (rc channel data) to struct rcdata
+//	  printf ("rcdata1:%d\n",rcdata->chan1);
+//	  printf ("rcdata2:%d\n",rcdata->chan2);
+//	  printf ("rcdata3:%d\n",rcdata->chan3);
+//	  printf ("rcdata4:%d\n",rcdata->chan4);
+//	  printf ("rcdata5:%d\n",rcdata->chan5);
+//	  printf ("rcdata6:%d\n",rcdata->chan6);
+//	  printf ("rcdata7:%d\n",rcdata->chan7);
+//	  printf ("rcdata8:%d\n",rcdata->chan8);
 	//  write(STDOUT_FILENO, pu8Payload, 11);
 
 	switch (param_rc_protocol) {
@@ -322,54 +355,58 @@ void process_packet(monitor_interface_t *interface, int adapter_no, int serialpo
 	    outputbuffer[2]='<'; // MSP header (direction)
 	    outputbuffer[3]=16;  // size
 	    outputbuffer[4]=200; // message type
-	    outputbuffer[5]= (uint8_t)(rcdata.chan1&0xFF); checksum^=outputbuffer[5];
-	    outputbuffer[6]= (uint8_t)(rcdata.chan1>>8); checksum^=outputbuffer[6];
-	    outputbuffer[7]= (uint8_t)(rcdata.chan2&0xFF); checksum^=outputbuffer[7];
-	    outputbuffer[8]= (uint8_t)(rcdata.chan2>>8); checksum^=outputbuffer[8];
-	    outputbuffer[9]= (uint8_t)(rcdata.chan3&0xFF); checksum^=outputbuffer[9];
-	    outputbuffer[10]=(uint8_t)(rcdata.chan3>>8); checksum^=outputbuffer[10];
-	    outputbuffer[11]=(uint8_t)(rcdata.chan4&0xFF); checksum^=outputbuffer[11];
-	    outputbuffer[12]=(uint8_t)(rcdata.chan4>>8); checksum^=outputbuffer[12];
-	    outputbuffer[13]=(uint8_t)(rcdata.chan5&0xFF); checksum^=outputbuffer[13];
-	    outputbuffer[14]=(uint8_t)(rcdata.chan5>>8); checksum^=outputbuffer[14];
-	    outputbuffer[15]=(uint8_t)(rcdata.chan6&0xFF); checksum^=outputbuffer[15];
-	    outputbuffer[16]=(uint8_t)(rcdata.chan6>>8); checksum^=outputbuffer[16];
-	    outputbuffer[17]=(uint8_t)(rcdata.chan7&0xFF); checksum^=outputbuffer[17];
-	    outputbuffer[18]=(uint8_t)(rcdata.chan7>>8); checksum^=outputbuffer[18];
-	    outputbuffer[19]=(uint8_t)(rcdata.chan8&0xFF); checksum^=outputbuffer[19];
-	    outputbuffer[20]=(uint8_t)(rcdata.chan8>>8); checksum^=outputbuffer[20];
+	    outputbuffer[5]= (uint8_t)(rcdata->chan1&0xFF); checksum^=outputbuffer[5];
+	    outputbuffer[6]= (uint8_t)(rcdata->chan1>>8); checksum^=outputbuffer[6];
+	    outputbuffer[7]= (uint8_t)(rcdata->chan2&0xFF); checksum^=outputbuffer[7];
+	    outputbuffer[8]= (uint8_t)(rcdata->chan2>>8); checksum^=outputbuffer[8];
+	    outputbuffer[9]= (uint8_t)(rcdata->chan3&0xFF); checksum^=outputbuffer[9];
+	    outputbuffer[10]=(uint8_t)(rcdata->chan3>>8); checksum^=outputbuffer[10];
+	    outputbuffer[11]=(uint8_t)(rcdata->chan4&0xFF); checksum^=outputbuffer[11];
+	    outputbuffer[12]=(uint8_t)(rcdata->chan4>>8); checksum^=outputbuffer[12];
+	    outputbuffer[13]=(uint8_t)(rcdata->chan5&0xFF); checksum^=outputbuffer[13];
+	    outputbuffer[14]=(uint8_t)(rcdata->chan5>>8); checksum^=outputbuffer[14];
+	    outputbuffer[15]=(uint8_t)(rcdata->chan6&0xFF); checksum^=outputbuffer[15];
+	    outputbuffer[16]=(uint8_t)(rcdata->chan6>>8); checksum^=outputbuffer[16];
+	    outputbuffer[17]=(uint8_t)(rcdata->chan7&0xFF); checksum^=outputbuffer[17];
+	    outputbuffer[18]=(uint8_t)(rcdata->chan7>>8); checksum^=outputbuffer[18];
+	    outputbuffer[19]=(uint8_t)(rcdata->chan8&0xFF); checksum^=outputbuffer[19];
+	    outputbuffer[20]=(uint8_t)(rcdata->chan8>>8); checksum^=outputbuffer[20];
 	    outputbuffer[21]=checksum; // checksum
 	    len = 22;
 	    break;
 	case 1: // Mavlink
-	    mavlink_msg_rc_channels_override_pack(255, 0, &msg, 1, 1,
-		rcdata.chan1, rcdata.chan2, rcdata.chan3, rcdata.chan4,
-		rcdata.chan5, rcdata.chan6, rcdata.chan7, rcdata.chan8);
-		// See if we can use the other 8 channels as well with mavlink
-    	mavlink_msg_to_send_buffer(outputbuffer, &msg);
-	    len = 26;
-	    break;
+	    mavlink_msg_rc_channels_override_pack(255, 1, &msg, 1, 1,
+			rcdata->chan1, rcdata->chan2, rcdata->chan3, rcdata->chan4,
+			rcdata->chan5, rcdata->chan6, rcdata->chan7, rcdata->chan8,
+			(rcdata->switches &   1) ? 2000 : 1000, (rcdata->switches &   2) ? 2000 : 1000,
+			(rcdata->switches &   4) ? 2000 : 1000, (rcdata->switches &   8) ? 2000 : 1000,
+			(rcdata->switches &  16) ? 2000 : 1000, (rcdata->switches &  32) ? 2000 : 1000,
+			(rcdata->switches &  64) ? 2000 : 1000, (rcdata->switches & 128) ? 2000 : 1000,
+			(rcdata->switches & 256) ? 2000 : 1000, (rcdata->switches & 512) ? 2000 : 1000);
+//	    len = 50;	//46;	//26;
+    	len = mavlink_msg_to_send_buffer(outputbuffer, &msg);
+		break;
 	case 2: // SUMD
 	    sumdcrc = 0;
 	    outputbuffer[0]=  0xa8; sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[0]];// SUMD header Vendor_ID
 	    outputbuffer[1]=  0x01; sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[1]];// SUMD header Status
 	    outputbuffer[2]=  0x08; sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[2]];// SUMD header num channels (8)
-	    outputbuffer[3]=  (uint8_t)((rcdata.chan1 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[3]];
-	    outputbuffer[4]=  (uint8_t)((rcdata.chan1 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[4]];
-	    outputbuffer[5]=  (uint8_t)((rcdata.chan2 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[5]];
-	    outputbuffer[6]=  (uint8_t)((rcdata.chan2 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[6]];
-	    outputbuffer[7]=  (uint8_t)((rcdata.chan3 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[7]];
-	    outputbuffer[8]=  (uint8_t)((rcdata.chan3 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[8]];
-	    outputbuffer[9]=  (uint8_t)((rcdata.chan4 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[9]];
-	    outputbuffer[10]= (uint8_t)((rcdata.chan4 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[10]];
-	    outputbuffer[11]= (uint8_t)((rcdata.chan5 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[11]];
-	    outputbuffer[12]= (uint8_t)((rcdata.chan5 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[12]];
-	    outputbuffer[13]= (uint8_t)((rcdata.chan6 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[13]];
-	    outputbuffer[14]= (uint8_t)((rcdata.chan6 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[14]];
-	    outputbuffer[15]= (uint8_t)((rcdata.chan7 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[15]];
-	    outputbuffer[16]= (uint8_t)((rcdata.chan7 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[16]];
-	    outputbuffer[17]= (uint8_t)((rcdata.chan8 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[17]];
-	    outputbuffer[18]= (uint8_t)((rcdata.chan8 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[18]];
+	    outputbuffer[3]=  (uint8_t)((rcdata->chan1 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[3]];
+	    outputbuffer[4]=  (uint8_t)((rcdata->chan1 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[4]];
+	    outputbuffer[5]=  (uint8_t)((rcdata->chan2 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[5]];
+	    outputbuffer[6]=  (uint8_t)((rcdata->chan2 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[6]];
+	    outputbuffer[7]=  (uint8_t)((rcdata->chan3 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[7]];
+	    outputbuffer[8]=  (uint8_t)((rcdata->chan3 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[8]];
+	    outputbuffer[9]=  (uint8_t)((rcdata->chan4 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[9]];
+	    outputbuffer[10]= (uint8_t)((rcdata->chan4 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[10]];
+	    outputbuffer[11]= (uint8_t)((rcdata->chan5 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[11]];
+	    outputbuffer[12]= (uint8_t)((rcdata->chan5 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[12]];
+	    outputbuffer[13]= (uint8_t)((rcdata->chan6 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[13]];
+	    outputbuffer[14]= (uint8_t)((rcdata->chan6 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[14]];
+	    outputbuffer[15]= (uint8_t)((rcdata->chan7 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[15]];
+	    outputbuffer[16]= (uint8_t)((rcdata->chan7 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[16]];
+	    outputbuffer[17]= (uint8_t)((rcdata->chan8 * 8) >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[17]];
+	    outputbuffer[18]= (uint8_t)((rcdata->chan8 * 8) &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[18]];
 	    outputbuffer[19]=(uint8_t)(sumdcrc >>8); // crc16
 	    outputbuffer[20]=(uint8_t)(sumdcrc &0xFF); // crc16
 	    len = 21;
@@ -378,22 +415,22 @@ void process_packet(monitor_interface_t *interface, int adapter_no, int serialpo
 	    ibuschecksum = 0xFFFF;
 	    outputbuffer[0]=  0x20; ibuschecksum -= outputbuffer[0]; // header
 	    outputbuffer[1]=  0x40; ibuschecksum -= outputbuffer[1]; // header
-	    outputbuffer[2]= (uint8_t)(rcdata.chan1&0xFF); ibuschecksum -= outputbuffer[2];
-	    outputbuffer[3]= (uint8_t)(rcdata.chan1>>8); ibuschecksum -= outputbuffer[3];
-	    outputbuffer[4]= (uint8_t)(rcdata.chan2&0xFF); ibuschecksum -= outputbuffer[4];
-	    outputbuffer[5]= (uint8_t)(rcdata.chan2>>8); ibuschecksum -= outputbuffer[5];
-	    outputbuffer[6]= (uint8_t)(rcdata.chan3&0xFF); ibuschecksum -= outputbuffer[6];
-	    outputbuffer[7]= (uint8_t)(rcdata.chan3>>8); ibuschecksum -= outputbuffer[7];
-	    outputbuffer[8]= (uint8_t)(rcdata.chan4&0xFF); ibuschecksum -= outputbuffer[8];
-	    outputbuffer[9]= (uint8_t)(rcdata.chan4>>8); ibuschecksum -= outputbuffer[9];
-	    outputbuffer[10]=(uint8_t)(rcdata.chan5&0xFF); ibuschecksum -= outputbuffer[10];
-	    outputbuffer[11]=(uint8_t)(rcdata.chan5>>8); ibuschecksum -= outputbuffer[11];
-	    outputbuffer[12]=(uint8_t)(rcdata.chan6&0xFF); ibuschecksum -= outputbuffer[12];
-	    outputbuffer[13]=(uint8_t)(rcdata.chan6>>8); ibuschecksum -= outputbuffer[13];
-	    outputbuffer[14]=(uint8_t)(rcdata.chan7&0xFF); ibuschecksum -= outputbuffer[14];
-	    outputbuffer[15]=(uint8_t)(rcdata.chan7>>8); ibuschecksum -= outputbuffer[15];
-	    outputbuffer[16]=(uint8_t)(rcdata.chan8&0xFF); ibuschecksum -= outputbuffer[16];
-	    outputbuffer[17]=(uint8_t)(rcdata.chan8>>8); ibuschecksum -= outputbuffer[17];
+	    outputbuffer[2]= (uint8_t)(rcdata->chan1&0xFF); ibuschecksum -= outputbuffer[2];
+	    outputbuffer[3]= (uint8_t)(rcdata->chan1>>8); ibuschecksum -= outputbuffer[3];
+	    outputbuffer[4]= (uint8_t)(rcdata->chan2&0xFF); ibuschecksum -= outputbuffer[4];
+	    outputbuffer[5]= (uint8_t)(rcdata->chan2>>8); ibuschecksum -= outputbuffer[5];
+	    outputbuffer[6]= (uint8_t)(rcdata->chan3&0xFF); ibuschecksum -= outputbuffer[6];
+	    outputbuffer[7]= (uint8_t)(rcdata->chan3>>8); ibuschecksum -= outputbuffer[7];
+	    outputbuffer[8]= (uint8_t)(rcdata->chan4&0xFF); ibuschecksum -= outputbuffer[8];
+	    outputbuffer[9]= (uint8_t)(rcdata->chan4>>8); ibuschecksum -= outputbuffer[9];
+	    outputbuffer[10]=(uint8_t)(rcdata->chan5&0xFF); ibuschecksum -= outputbuffer[10];
+	    outputbuffer[11]=(uint8_t)(rcdata->chan5>>8); ibuschecksum -= outputbuffer[11];
+	    outputbuffer[12]=(uint8_t)(rcdata->chan6&0xFF); ibuschecksum -= outputbuffer[12];
+	    outputbuffer[13]=(uint8_t)(rcdata->chan6>>8); ibuschecksum -= outputbuffer[13];
+	    outputbuffer[14]=(uint8_t)(rcdata->chan7&0xFF); ibuschecksum -= outputbuffer[14];
+	    outputbuffer[15]=(uint8_t)(rcdata->chan7>>8); ibuschecksum -= outputbuffer[15];
+	    outputbuffer[16]=(uint8_t)(rcdata->chan8&0xFF); ibuschecksum -= outputbuffer[16];
+	    outputbuffer[17]=(uint8_t)(rcdata->chan8>>8); ibuschecksum -= outputbuffer[17];
 	    outputbuffer[18]=0xdc; ibuschecksum -= outputbuffer[18];
 	    outputbuffer[19]=0x05; ibuschecksum -= outputbuffer[19];
 	    outputbuffer[20]=0xdc; ibuschecksum -= outputbuffer[20];
@@ -414,34 +451,34 @@ void process_packet(monitor_interface_t *interface, int adapter_no, int serialpo
 	    // protocl uses the same checksum as sumd so we use the sumd variables and checksum functions
 	    sumdcrc = 0;
 	    // http://www.wolframalpha.com/input/?i=linear+fit+%7B800,+0%7D,+%7B1500,2048%7D,+%7B2200,+4095%7D
-	    // 2.925 * rcdata.chanX - 2339.83 = SRXL 12bit channel format
-	    rcdata.chan1 = (2.925 * rcdata.chan1) - 2339.83;
-	    rcdata.chan2 = (2.925 * rcdata.chan2) - 2339.83;
-	    rcdata.chan3 = (2.925 * rcdata.chan3) - 2339.83;
-	    rcdata.chan4 = (2.925 * rcdata.chan4) - 2339.83;
-	    rcdata.chan5 = (2.925 * rcdata.chan5) - 2339.83;
-	    rcdata.chan6 = (2.925 * rcdata.chan6) - 2339.83;
-	    rcdata.chan7 = (2.925 * rcdata.chan7) - 2339.83;
-	    rcdata.chan8 = (2.925 * rcdata.chan8) - 2339.83;
-	    //printf ("rcdata1:%d\n",rcdata.chan1);
-	    //printf ("rcdata2:%d\n",rcdata.chan2);
+	    // 2.925 * rcdata->chanX - 2339.83 = SRXL 12bit channel format
+	    rcdata->chan1 = (2.925 * rcdata->chan1) - 2339.83;
+	    rcdata->chan2 = (2.925 * rcdata->chan2) - 2339.83;
+	    rcdata->chan3 = (2.925 * rcdata->chan3) - 2339.83;
+	    rcdata->chan4 = (2.925 * rcdata->chan4) - 2339.83;
+	    rcdata->chan5 = (2.925 * rcdata->chan5) - 2339.83;
+	    rcdata->chan6 = (2.925 * rcdata->chan6) - 2339.83;
+	    rcdata->chan7 = (2.925 * rcdata->chan7) - 2339.83;
+	    rcdata->chan8 = (2.925 * rcdata->chan8) - 2339.83;
+	    //printf ("rcdata1:%d\n",rcdata->chan1);
+	    //printf ("rcdata2:%d\n",rcdata->chan2);
 	    outputbuffer[0]=  0xa1; sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[0]]; // header
-	    outputbuffer[1]=  (uint8_t)(rcdata.chan1 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[1]];
-	    outputbuffer[2]=  (uint8_t)(rcdata.chan1 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[2]];
-	    outputbuffer[3]=  (uint8_t)(rcdata.chan2 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[3]];
-	    outputbuffer[4]=  (uint8_t)(rcdata.chan2 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[4]];
-	    outputbuffer[5]=  (uint8_t)(rcdata.chan3 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[5]];
-	    outputbuffer[6]=  (uint8_t)(rcdata.chan3 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[6]];
-	    outputbuffer[7]=  (uint8_t)(rcdata.chan4 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[7]];
-	    outputbuffer[8]=  (uint8_t)(rcdata.chan4 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[8]];
-	    outputbuffer[9]=  (uint8_t)(rcdata.chan5 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[9]];
-	    outputbuffer[10]= (uint8_t)(rcdata.chan5 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[10]];
-	    outputbuffer[11]= (uint8_t)(rcdata.chan6 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[11]];
-	    outputbuffer[12]= (uint8_t)(rcdata.chan6 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[12]];
-	    outputbuffer[13]= (uint8_t)(rcdata.chan7 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[13]];
-	    outputbuffer[14]= (uint8_t)(rcdata.chan7 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[14]];
-	    outputbuffer[15]= (uint8_t)(rcdata.chan8 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[15]];
-	    outputbuffer[16]= (uint8_t)(rcdata.chan8 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[16]];
+	    outputbuffer[1]=  (uint8_t)(rcdata->chan1 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[1]];
+	    outputbuffer[2]=  (uint8_t)(rcdata->chan1 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[2]];
+	    outputbuffer[3]=  (uint8_t)(rcdata->chan2 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[3]];
+	    outputbuffer[4]=  (uint8_t)(rcdata->chan2 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[4]];
+	    outputbuffer[5]=  (uint8_t)(rcdata->chan3 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[5]];
+	    outputbuffer[6]=  (uint8_t)(rcdata->chan3 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[6]];
+	    outputbuffer[7]=  (uint8_t)(rcdata->chan4 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[7]];
+	    outputbuffer[8]=  (uint8_t)(rcdata->chan4 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[8]];
+	    outputbuffer[9]=  (uint8_t)(rcdata->chan5 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[9]];
+	    outputbuffer[10]= (uint8_t)(rcdata->chan5 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[10]];
+	    outputbuffer[11]= (uint8_t)(rcdata->chan6 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[11]];
+	    outputbuffer[12]= (uint8_t)(rcdata->chan6 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[12]];
+	    outputbuffer[13]= (uint8_t)(rcdata->chan7 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[13]];
+	    outputbuffer[14]= (uint8_t)(rcdata->chan7 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[14]];
+	    outputbuffer[15]= (uint8_t)(rcdata->chan8 >>8); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[15]];
+	    outputbuffer[16]= (uint8_t)(rcdata->chan8 &0xFF); sumdcrc = (sumdcrc << 8) ^ sumdcrc16_table[(sumdcrc >> 8) ^ outputbuffer[16]];
 	    outputbuffer[17]=0x08; ibuschecksum -= outputbuffer[17];
 	    outputbuffer[18]=0x00; ibuschecksum -= outputbuffer[18];
 	    outputbuffer[19]=0x08; ibuschecksum -= outputbuffer[19];
@@ -602,6 +639,10 @@ int main(int argc, char *argv[]) {
 
 	int serialport = 0;
 
+#ifdef	JSSWITCHES
+	rcdata = rc_channels_memory_open();
+#endif
+	
 	while (1) {
 		int nOptionIndex;
 		static const struct option optiona[] = {
@@ -812,7 +853,7 @@ int main(int argc, char *argv[]) {
         	exit(1);
     	    }
 	}
-
+	
 	for(;;) {
 	    packetcounter_ts_now[i] = current_timestamp();
 	    if (packetcounter_ts_now[i] - packetcounter_ts_prev[i] > 1500) {

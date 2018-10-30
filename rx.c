@@ -543,10 +543,16 @@ wifibroadcast_rx_status_t *status_memory_open(void) {
 	int fd;
 	
 	sprintf(buf, "/wifibroadcast_rx_status_%d", param_port);
-	fd = shm_open(buf, O_RDWR, S_IRUSR | S_IWUSR);
+///	fd = shm_open(buf, O_RDWR, S_IRUSR | S_IWUSR);
+	fd = shm_open(buf, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
 	if(fd < 0) {
 		perror("shm_open");
+		exit(1);
+	}
+
+	if (ftruncate(fd, sizeof(wifibroadcast_rx_status_t)) == -1) {
+		perror("ftruncate");
 		exit(1);
 	}
 

@@ -129,7 +129,7 @@ struct header_s {
 }; // __attribute__ ((__packed__)); // not packed for now, doesn't work for some reason
 struct header_s header;
 
-
+/*
 struct rcdata_s {
 	unsigned int chan1 : 11;
 	unsigned int chan2 : 11;
@@ -139,9 +139,10 @@ struct rcdata_s {
 	unsigned int chan6 : 11;
 	unsigned int chan7 : 11;
 	unsigned int chan8 : 11;
+	unsigned int switches : 16;
 } __attribute__ ((__packed__));
 struct rcdata_s rcdata;
-
+*/
 
 long long current_timestamp() {
     struct timeval te;
